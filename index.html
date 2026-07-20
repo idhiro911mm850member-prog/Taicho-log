@@ -78,11 +78,13 @@ textarea{resize:vertical;min-height:64px}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 .actions{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:24px}
+.actions.single{grid-template-columns:1fr}
 button.primary{background:var(--calm);color:#0B1112;border:none;border-radius:10px;padding:15px;
   font-size:15px;font-weight:700;font-family:inherit;letter-spacing:.06em;cursor:pointer}
 button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:10px;
   padding:15px 18px;font-size:14px;font-family:inherit;cursor:pointer}
 button.sm{padding:8px 12px;font-size:13px}
+button.wide{width:100%;margin-top:4px}
 button:active{transform:scale(.985)}
 
 .log{margin-top:34px;border-top:1px solid var(--line);padding-top:18px}
@@ -114,7 +116,7 @@ button:active{transform:scale(.985)}
 
 <header>
   <h1>体調ログ</h1>
-  <button class="ghost sm" id="quick">保存</button>
+  <span class="sub">1 → 5 で快調</span>
 </header>
 
 <div class="datebar">
@@ -148,9 +150,8 @@ button:active{transform:scale(.985)}
   <label class="f">メモ<textarea id="memo" placeholder="会議が多かった / 夕方から頭痛 など"></textarea></label>
 </div>
 
-<div class="actions">
-  <button class="primary" id="save">この日を記録する</button>
-  <button class="ghost" id="export">.md</button>
+<div class="actions single">
+  <button class="ghost" id="export">内容を見る・コピー（.md）</button>
 </div>
 
 <div class="log">
@@ -174,6 +175,8 @@ button:active{transform:scale(.985)}
 </div>
 
 <p class="note">1＝つらい 〜 5＝快調。記録は端末に保存されます。</p>
+
+<button class="primary wide" id="quick">ファイルに保存（.md）</button>
 
 <script>
 const METRICS=[
@@ -208,7 +211,7 @@ function buildMetrics(){
     </div>`).join('');
   $('metrics').addEventListener('click',e=>{
     const b=e.target.closest('.seg'); if(!b) return;
-    cur[b.dataset.k]=+b.dataset.v; paintMetrics();
+    cur[b.dataset.k]=+b.dataset.v; paintMetrics(); autosave();
   });
 }
 function paintMetrics(){
@@ -252,13 +255,14 @@ document.querySelector('.drink').addEventListener('click',e=>{
   const btn=e.target.closest('.mn'); if(!btn) return;
   const id=btn.closest('.step').dataset.t;
   const next=Math.max(0,(+$(id).textContent||0)+(+btn.dataset.d));
-  $(id).textContent=next; paintAlc();
+  $(id).textContent=next; paintAlc(); autosave();
 });
 
 $('gymBtn').addEventListener('click',()=>{
   const on=$('gymBtn').getAttribute('aria-pressed')==='true';
   $('gymBtn').setAttribute('aria-pressed',String(!on));
   if(on)$('gymMin').value='';
+  autosave();
 });
 
 function paintHistory(){
@@ -271,7 +275,7 @@ function paintHistory(){
   }).join('') : '<div class="empty">まだ記録がありません。</div>';
 }
 
-$('save').addEventListener('click',async()=>{
+async function autosave(){
   const d=$('date').value; if(!d) return;
   const e={};
   METRICS.forEach(m=>{if(cur[m.k]!=null)e[m.k]=cur[m.k]});
@@ -283,9 +287,14 @@ $('save').addEventListener('click',async()=>{
     if($('gymMin').value!=='')e.gymMin=+$('gymMin').value;
   }
   if($('memo').value.trim())e.memo=$('memo').value.trim();
-  data[d]=e; await persist();
-  $('flag').classList.add('on'); paintHistory(); paintMetrics();
-  toast(`${d} を記録しました`);
+  if(!Object.keys(e).length){delete data[d]} else {data[d]=e}
+  await persist();
+  $('flag').classList.toggle('on',!!data[d]);
+  paintHistory(); paintMetrics();
+}
+['input','change'].forEach(ev=>{
+  $('memo').addEventListener(ev,autosave);
+  $('gymMin').addEventListener(ev,autosave);
 });
 function toast(msg){
   let t=document.getElementById('toast');
