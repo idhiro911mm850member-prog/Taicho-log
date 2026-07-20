@@ -114,7 +114,7 @@ button:active{transform:scale(.985)}
 
 <header>
   <h1>体調ログ</h1>
-  <span class="sub">1 → 5 で快調</span>
+  <button class="ghost sm" id="quick">保存</button>
 </header>
 
 <div class="datebar">
@@ -294,14 +294,14 @@ function toast(msg){
   clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200);
 }
 
-$('export').addEventListener('click',()=>{
+function buildMd(){
   const keys=Object.keys(data).sort();
-  if(!keys.length){alert('記録がまだありません。');return}
+  if(!keys.length) return null;
   const esc=s=>String(s).replace(/\|/g,'\\|').replace(/\n/g,' ');
   const rows=keys.map(d=>{const e=data[d];
     const g=alcGrams(e.b350||0,e.b500||0);
     return `| ${d} | ${e.eye??'-'} | ${e.awake??'-'} | ${e.mood??'-'} | ${e.sleep??'-'} | ${e.gym?(e.gymMin?e.gymMin+'分':'○'):'-'} | ${e.b350??0} | ${e.b500??0} | ${g} | ${esc(e.memo??'')} |`});
-  const md=[
+  return [
     '# 体調ログ','',
     `更新日: ${today()} ／ 記録日数: ${keys.length}日`,'',
     '評価は 1＝つらい 〜 5＝快調（数値が大きいほど良い）',
@@ -310,20 +310,31 @@ $('export').addEventListener('click',()=>{
     '| --- | --: | --: | --: | --: | :-: | --: | --: | --: | --- |',
     ...rows,''
   ].join('\n');
-  const url=URL.createObjectURL(new Blob([md],{type:'text/markdown;charset=utf-8'}));
+}
+async function shareMd(md){
+  const name=`taicho-log_${today()}.md`;
+  const file=new File([md],name,{type:'text/markdown'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file]}); return}catch(err){if(err.name==='AbortError')return}
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([md],{type:'text/markdown;charset=utf-8'}));
+  a.download=name; a.rel='noopener'; a.click();
+}
+
+$('quick').addEventListener('click',()=>{
+  const md=buildMd();
+  if(!md){toast('記録がまだありません');return}
+  shareMd(md);
+});
+
+$('export').addEventListener('click',()=>{
+  const md=buildMd();
+  if(!md){toast('記録がまだありません');return}
   $('mdout').value=md;
   $('sheet').hidden=false;
   $('copy').textContent='コピー';
-  $('dl').onclick=async()=>{
-    const name=`taicho-log_${today()}.md`;
-    const file=new File([md],name,{type:'text/markdown'});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      try{await navigator.share({files:[file]}); return}catch(err){if(err.name==='AbortError')return}
-    }
-    const a=document.createElement('a');
-    a.href=url; a.download=name; a.rel='noopener'; a.click();
-    toast('保存されない場合はコピーをお使いください');
-  };
+  $('dl').onclick=()=>shareMd(md);
   $('copy').onclick=async()=>{
     try{await navigator.clipboard.writeText(md)}
     catch(err){$('mdout').select();document.execCommand('copy')}
